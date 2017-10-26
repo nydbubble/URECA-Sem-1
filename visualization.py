@@ -10,9 +10,9 @@ attributefile = open("Anno/list_attr_cloth.txt", 'r')
 attributes = [line.split() for line in attributefile.readlines()] #attributes starts from index 3
 del attributes[0]
 
-attributeimage = open("Anno/test.txt", 'r')
-for lines in range(1):
-    sample = [line.split() for line in attributeimage.readline()] 
+"""attributeimage = open("Anno/test.txt", 'r')
+line = attributeimage.readline()
+sample = [line.split()]
 
 i = 1
 j = 0
@@ -22,7 +22,7 @@ for j in range (len(sample)):
         if sample[j][i] == '1':
             print(attributes[i])
 
-#print(attributes) #debug
+#print(attributes) #debug"""
 
 data = ImageFolder(root='img', transform=ToTensor())
 
@@ -54,18 +54,15 @@ imshow(out, title=[class_names[x] for x in classes])
 
 title=[class_names[x] for x in classes]
 
-"""with open('Anno/list_attr_img.txt', 'r') as searchfile:
+
+with open('Anno/list_attr_img.txt', 'r') as searchfile:
     for line in searchfile:
         if title[0] in line:
-            sample = [line.split() for line in searchfile.readlines()] 
-
-            i = 1
-            j = 0
-            for j in range (len(sample)):
-                print(sample[0][0])
-                for i in range (len(sample[j])):
-                    if sample[j][i] == '1':
-                        print(attributes[i])"""
+            sample = [line.split()]
+            print(sample[0][0])
+            for i in range (len(sample[0])):
+                if sample[0][i] == '1':
+                    print(attributes[i])
 
 plt.ioff()
 plt.show()
