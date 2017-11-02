@@ -8,7 +8,7 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch import nn
-import torch.nn.functional as F
+#import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
 
@@ -16,8 +16,8 @@ TRAIN_DATA = 'Anno/val.csv'
 IMG_PATH = ''
 IMG_EXT = ''
 
-class KaggleAmazonDataset(Dataset):
-    """Dataset wrapping images and target labels for Kaggle - Planet Amazon from Space competition.
+class DeepFashionDataset(Dataset):
+    """Dataset wrapping images and target labels for DeepFashion Dataset
 
     Arguments:
         A CSV file path
@@ -59,7 +59,7 @@ transformations = transforms.Compose([
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-dset_train = KaggleAmazonDataset(TRAIN_DATA,IMG_PATH,IMG_EXT,transformations)
+dset_train = DeepFashionDataset(TRAIN_DATA,IMG_PATH,IMG_EXT,transformations)
 
 train_loader = DataLoader(dset_train,
                           batch_size=256,
@@ -131,11 +131,7 @@ model = alexnet()
 
 print(model)
 
-
-import torch.optim as optim
-
 criterion = torch.nn.BCELoss()
-#optimizer = optim.SGD(alexnet.parameters(), lr=0.001, momentum=0.9)
 optimizer = optim.Adam(model.parameters(), lr=0.0005,weight_decay=5e-5) #  L2 regularization
 
 if use_gpu:   
@@ -151,8 +147,8 @@ def train(epoch):
           data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
-        print(output)
-        print(target)
+        #print(output)
+        #print(target)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -161,39 +157,8 @@ def train(epoch):
                 epoch, batch_idx * len(data), len(train_loader.dataset),
                 100. * batch_idx / len(train_loader), loss.data[0]))
 
+print("Begin training")
 for epoch in range(1, 2):
     train(epoch)
-    """print('Epoch {}'.format(epoch + 1))
-    print('*' * 5 + ':')
-    running_loss = 0.0
-    running_acc = 0.0
-    for i, data in enumerate(dataloders['train'], 1):
 
-        img, label = data
-        if use_gpu:
-            img, label = Variable(img.cuda(async=True)), Variable(label.cuda(async=True))  # On GPU
-        else:
-            img, label = Variable(img), Variable(
-                label)  # RuntimeError: expected CPU tensor (got CUDA tensor)
-
-        out = model(img)
-        loss = criterion(out, label)
-        running_loss += loss.data[0] * label.size(0)
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-        if i % 10 == 0:
-            all_losses.append(running_loss / (batch_size * i))
-            print('[{}/{}] Loss: {:.6f}'.format(
-                epoch + 1, num_epoches, running_loss / (batch_size * i),
-                running_acc / (batch_size * i)))
-
-    print('Finish {} epoch, Loss: {:.6f}'.format(epoch + 1, running_loss / (len(train_ds))))"""
-
-print('Begin Training')
-for epoch in range(1):
-    train(epoch)
-
-print('Finished Training')
+print("Training finished")
