@@ -1,47 +1,78 @@
-from __future__ import print_function, division
+import pandas as pd
+from torch import np # Torch wrapper for Numpy
+
+from PIL import Image
 
 import torch
-import torch.nn as nn
+from torch.utils.data.dataset import Dataset
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from torch import nn
+import torch.nn.functional as F
 import torch.optim as optim
-from torch.optim import lr_scheduler
 from torch.autograd import Variable
-import numpy as np
-import torchvision
-from torchvision import datasets, models, transforms
-import matplotlib.pyplot as plt
-import time
-import os
-import logging
 
-lgr = logging.getLogger(__name__)
-#preparing the dataset
-data_transforms = {
-    'train': transforms.Compose([
+TRAIN_DATA = 'Anno/val.csv'
+IMG_PATH = ''
+IMG_EXT = ''
+
+class KaggleAmazonDataset(Dataset):
+    """Dataset wrapping images and target labels for Kaggle - Planet Amazon from Space competition.
+
+    Arguments:
+        A CSV file path
+        Path to image folder
+        Extension of images
+        PIL transforms
+    """
+
+    def __init__(self, csv_path, img_path, img_ext, transform=None):
+    
+        tmp_df = pd.read_csv(csv_path)
+        
+        #self.mlb = MultiLabelBinarizer()
+        self.img_path = img_path
+        self.img_ext = img_ext
+        self.transform = transform
+
+        self.X_train = tmp_df['image_name']
+        #self.y_train = self.mlb.fit_transform(tmp_df['tags'].str.split()).astype(np.float32)
+        self.y_train = np.array(list(tmp_df['attribute_labels'].str.split())).astype(np.float32)
+
+    def __getitem__(self, index):
+        img = Image.open(self.X_train[index])
+        img = img.convert('RGB')
+        if self.transform is not None:
+            img = self.transform(img)
+        
+        label = torch.from_numpy(self.y_train[index])
+        return img, label
+
+    def __len__(self):
+        return len(self.X_train.index)
+
+
+transformations = transforms.Compose([
         transforms.RandomSizedCrop(224),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-    'val': transforms.Compose([
-        transforms.Scale(256),
-        transforms.CenterCrop(224),
-        transforms.ToTensor(),
-        transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ]),
-}
+        ])
 
-data_dir = ''
-image_datasets = {x: datasets.ImageFolder(os.path.join(data_dir, x),
-                                          data_transforms[x])
-                  for x in ['train', 'val']}
-dataloders = {x: torch.utils.data.DataLoader(image_datasets[x], batch_size=4,
-                                             shuffle=True, num_workers=1, pin_memory = True)
-              for x in ['train', 'val']}
-dataset_sizes = {x: len(image_datasets[x]) for x in ['train', 'val']}
-class_names = image_datasets['train'].classes
+dset_train = KaggleAmazonDataset(TRAIN_DATA,IMG_PATH,IMG_EXT,transformations)
+
+train_loader = DataLoader(dset_train,
+                          batch_size=256,
+                          shuffle=True,
+                          num_workers=1, # 1 for CUDA
+                          pin_memory = True # CUDA only
+                         )
+
 
 use_gpu = torch.cuda.is_available()
-lgr.info("USE CUDA=" + str (use_gpu))
+
+
+#preparing custom alexnet architechture
 
 class AlexNet(nn.Module):
 
@@ -72,18 +103,19 @@ class AlexNet(nn.Module):
             nn.Linear(4096, num_classes),
         )
 
-        self.sig = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid()
+
 
     def forward(self, x):
         x = self.features(x)
         x = x.view(x.size(0), 256 * 6 * 6)
         x = self.classifier(x)
-        x = self.sig(x)
+        x = self.sigmoid(x)
         return x
 
 
 def alexnet(pretrained=False, **kwargs):
-    r"""AlexNet model architecture from the
+    """AlexNet model architecture from the
     `"One weird trick..." <https://arxiv.org/abs/1404.5997>`_ paper.
 
     Args:
@@ -94,7 +126,7 @@ def alexnet(pretrained=False, **kwargs):
         model.load_state_dict(model_zoo.load_url(model_urls['alexnet']))
     return model
 
-#preparing custom alexnet architechture
+
 model = alexnet()
 
 print(model)
@@ -102,37 +134,66 @@ print(model)
 
 import torch.optim as optim
 
-criterion = nn.BCELoss()
+criterion = torch.nn.BCELoss()
 #optimizer = optim.SGD(alexnet.parameters(), lr=0.001, momentum=0.9)
 optimizer = optim.Adam(model.parameters(), lr=0.0005,weight_decay=5e-5) #  L2 regularization
 
-if use_gpu:
-    lgr.info ("Using the GPU")    
+if use_gpu:   
     model.cuda()
     criterion.cuda()
 
-lgr.info (optimizer)
-lgr.info (criterion)
-
 def train(epoch):
     model.train()
-    for batch_idx, (data, target) in enumerate(dataloders['train']):
-      if use_gpu:
-        data, target = Variable(data.cuda(async=True)), Variable(target.cuda(async=True)) # On GPU
-      else:
-        data, target = Variable(data), Variable(target)
+    for batch_idx, (data, target) in enumerate(train_loader):
+        if use_gpu:
+          data, target = Variable(data.cuda(async = True)), Variable(target.cuda(async=True))
+        else:
+          data, target = Variable(data), Variable(target)
         optimizer.zero_grad()
         output = model(data)
+        print(output)
+        print(target)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
         if batch_idx % 10 == 0:
             print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                epoch, batch_idx * len(data), len(dataloders['train'].dataset),
-                100. * batch_idx / len(dataloders['train']), loss.data[0]))
+                epoch, batch_idx * len(data), len(train_loader.dataset),
+                100. * batch_idx / len(train_loader), loss.data[0]))
+
+for epoch in range(1, 2):
+    train(epoch)
+    """print('Epoch {}'.format(epoch + 1))
+    print('*' * 5 + ':')
+    running_loss = 0.0
+    running_acc = 0.0
+    for i, data in enumerate(dataloders['train'], 1):
+
+        img, label = data
+        if use_gpu:
+            img, label = Variable(img.cuda(async=True)), Variable(label.cuda(async=True))  # On GPU
+        else:
+            img, label = Variable(img), Variable(
+                label)  # RuntimeError: expected CPU tensor (got CUDA tensor)
+
+        out = model(img)
+        loss = criterion(out, label)
+        running_loss += loss.data[0] * label.size(0)
+
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        if i % 10 == 0:
+            all_losses.append(running_loss / (batch_size * i))
+            print('[{}/{}] Loss: {:.6f}'.format(
+                epoch + 1, num_epoches, running_loss / (batch_size * i),
+                running_acc / (batch_size * i)))
+
+    print('Finish {} epoch, Loss: {:.6f}'.format(epoch + 1, running_loss / (len(train_ds))))"""
 
 print('Begin Training')
-for epoch in range(30):
+for epoch in range(1):
     train(epoch)
 
 print('Finished Training')
