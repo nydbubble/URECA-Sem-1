@@ -133,7 +133,7 @@ model = alexnet()
 print(model)
 
 criterion = torch.nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0001,weight_decay=5e-4) # Changed to Fashion Forecast implementation
+optimizer = optim.Adam(model.parameters(), lr=0.001,weight_decay=5e-4) # Changed to Fashion Forecast implementation
 
 if use_gpu:   
     model.cuda()
