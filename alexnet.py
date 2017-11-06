@@ -8,35 +8,38 @@ from torch.utils.data.dataset import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from torch import nn
-#import torch.nn.functional as F
 import torch.optim as optim
 from torch.autograd import Variable
+#from sklearn.preprocessing import MultiLabelBinarizer
 
-TRAIN_DATA = 'Anno/val.csv'
-IMG_PATH = ''
-IMG_EXT = ''
+TRAIN_DATA = 'Anno/train.csv'
 
+use_gpu = torch.cuda.is_available()
+#use_gpu = False
+
+"""attributefile = open("Anno/list_attr_cloth.txt", 'r')
+attributes = [line.split() for line in attributefile.readlines()] #attributes starts from index 3
+del attributes[0]
+del attributes[0]""" # TODO: implement MLB for attribute prediction
+
+#Preparing dataset
 class DeepFashionDataset(Dataset):
     """Dataset wrapping images and target labels for DeepFashion Dataset
 
     Arguments:
         A CSV file path
-        Path to image folder
-        Extension of images
         PIL transforms
     """
 
-    def __init__(self, csv_path, img_path, img_ext, transform=None):
+    def __init__(self, csv_path, transform=None):
     
         tmp_df = pd.read_csv(csv_path)
         
-        #self.mlb = MultiLabelBinarizer()
-        self.img_path = img_path
-        self.img_ext = img_ext
+        #self.mlb = MultiLabelBinarizer(classes = attributes) # TODO: implement MLB for attribute prediction
         self.transform = transform
 
         self.X_train = tmp_df['image_name']
-        #self.y_train = self.mlb.fit_transform(tmp_df['tags'].str.split()).astype(np.float32)
+        #self.y_train = self.mlb.fit_transform(tmp_df['attribute_labels'].str.split()).astype(np.float32)
         self.y_train = np.array(list(tmp_df['attribute_labels'].str.split())).astype(np.float32)
 
     def __getitem__(self, index):
@@ -59,21 +62,19 @@ transformations = transforms.Compose([
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
         ])
 
-dset_train = DeepFashionDataset(TRAIN_DATA,IMG_PATH,IMG_EXT,transformations)
+dset_train = DeepFashionDataset(TRAIN_DATA,transformations)
 
-train_loader = DataLoader(dset_train,
+
+if use_gpu:
+  train_loader = DataLoader(dset_train, batch_size = 256, shuffle = True, num_workers = 1, pin_memory = 1)
+else:
+  train_loader = DataLoader(dset_train,
                           batch_size=256,
                           shuffle=True,
-                          num_workers=1, # 1 for CUDA
-                          pin_memory = True # CUDA only
+                          num_workers=4, # 1 for CUDA
                          )
 
-
-use_gpu = torch.cuda.is_available()
-
-
 #preparing custom alexnet architechture
-
 class AlexNet(nn.Module):
 
     def __init__(self, num_classes=1000):
@@ -132,7 +133,7 @@ model = alexnet()
 print(model)
 
 criterion = torch.nn.BCELoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0005,weight_decay=5e-5) #  L2 regularization
+optimizer = optim.Adam(model.parameters(), lr=0.0001,weight_decay=5e-4) # Changed to Fashion Forecast implementation
 
 if use_gpu:   
     model.cuda()
@@ -148,7 +149,6 @@ def train(epoch):
         optimizer.zero_grad()
         output = model(data)
         #print(output)
-        #print(target)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
